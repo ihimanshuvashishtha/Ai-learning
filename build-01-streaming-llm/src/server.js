@@ -1,4 +1,5 @@
 import fastify from "fastify";
+import { chatRoutes } from "./routes/chat.js";
 
 const app = fastify({
   logger: true,
@@ -11,6 +12,8 @@ app.get("/api/health", async () => {
     timestamp: new Date().toISOString(),
   };
 });
+
+await app.register(chatRoutes);
 
 const start = async () => {
   try {
