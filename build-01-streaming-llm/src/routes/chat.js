@@ -27,13 +27,53 @@ export async function chatRoutes(app) {
     const model = body.model || getDefaultModel(providerName);
     const provider = getProvider(providerName);
 
-    return reply.send({
-      status: "ok",
-      message: "Chat route validation is working",
-      provider: provider.providerName,
-      model,
-      sessionId: body.sessionId,
-      userMessage: body.message,
+    const messages = [
+      {
+        role: "system",
+        content: body.systemPrompt || "You are a helpful AI assistant.",
+      },
+      {
+        role: "user",
+        content: body.message,
+      },
+    ];
+
+    reply.hijack();
+
+    reply.raw.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
     });
+
+    try {
+      for await (const token of provider.streamChat({ messages, model })) {
+        reply.raw.write(
+          `data: ${JSON.stringify({
+            type: "token",
+            content: token,
+          })}\n\n`
+        );
+      }
+
+      reply.raw.write(
+        `data: ${JSON.stringify({
+          type: "done",
+          provider: provider.providerName,
+          model,
+        })}\n\n`
+      );
+    } catch (error) {
+      request.log.error(error, "Streaming chat failed");
+
+      reply.raw.write(
+        `data: ${JSON.stringify({
+          type: "error",
+          message: "AI streaming failed",
+        })}\n\n`
+      );
+    } finally {
+      reply.raw.end();
+    }
   });
 }
