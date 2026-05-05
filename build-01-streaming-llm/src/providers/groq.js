@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { LLMProvider } from "./base.js";
 import { config } from "../config.js";
+import { withRetry } from "../utils/retry.js";
 
 export class GroqProvider extends LLMProvider {
   constructor() {
@@ -13,11 +14,13 @@ export class GroqProvider extends LLMProvider {
   }
 
   async *streamChat({ messages, model }) {
-    const stream = await this.client.chat.completions.create({
+    const stream = await withRetry(()=>
+      this.client.chat.completions.create({
       model,
       messages,
       stream: true,
-    });
+    })
+  );
 
     for await (const chunk of stream) {
       const token = chunk.choices?.[0]?.delta?.content;
