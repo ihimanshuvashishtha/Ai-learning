@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getDefaultModel, getProvider } from "../providers/index.js";
 import { config } from "../config.js";
+import { getMessages, saveMessages } from "../memory/conversation.js";
 
 const chatRequestSchema = z.object({
   sessionId: z.string().min(1, "sessionId is required"),
@@ -26,15 +27,26 @@ export async function chatRoutes(app) {
     const providerName = body.provider || config.defaultProvider;
     const model = body.model || getDefaultModel(providerName);
     const provider = getProvider(providerName);
+    const oldMesssages = await getMessages(body.sessionId)
+
+    const userMessage = {
+      role:'user',
+      content:body.message,
+      timestamp:new Date().toISOString(),
+    }
 
     const messages = [
       {
         role: "system",
         content: body.systemPrompt || "You are a helpful AI assistant.",
       },
+      ...oldMesssages.map((message)=>({
+        role: message.role,
+        content: message.content,
+      })),
       {
         role: "user",
-        content: body.message,
+        content: userMessage.content,
       },
     ];
 
@@ -46,8 +58,10 @@ export async function chatRoutes(app) {
       Connection: "keep-alive",
     });
 
+    let assistantResponse = ""
     try {
       for await (const token of provider.streamChat({ messages, model })) {
+        assistantResponse += token;
         reply.raw.write(
           `data: ${JSON.stringify({
             type: "token",
@@ -55,6 +69,18 @@ export async function chatRoutes(app) {
           })}\n\n`
         );
       }
+
+    const assistantMessage = {
+      role: "assistant",
+      content:assistantResponse,
+      timestamp:new Date().toISOString(),
+    }
+
+    await saveMessages(body.sessionId,[
+      ...oldMesssages,
+      userMessage,
+      assistantMessage,
+    ])
 
       reply.raw.write(
         `data: ${JSON.stringify({

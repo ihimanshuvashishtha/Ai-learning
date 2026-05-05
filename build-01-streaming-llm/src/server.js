@@ -1,8 +1,20 @@
 import fastify from "fastify";
 import { chatRoutes } from "./routes/chat.js";
+import { config } from "dotenv";
 
 const app = fastify({
-  logger: true,
+  logger: config.nodeEnv === "development"
+  ?{
+    transport:{
+      target:"pino-pretty",
+      options:{
+        colorize:true,
+        translateTime:"HH:MM:ss",
+        ignore:'pid,hostname',
+      },
+    },
+  }
+  :true,
 });
 
 app.get("/api/health", async () => {
