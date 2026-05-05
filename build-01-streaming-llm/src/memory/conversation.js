@@ -45,3 +45,21 @@ export async function clearMessages(sessionId) {
     return true;
 
 }
+
+export async function checkRedisHealth() {
+    const startTime = Date.now()
+    try{
+        const response = await redis.ping();
+        return{
+            status:response === "PONG" ? "connected" :"unhealthy",
+            latencyMs: Date.now()-startTime,
+        };
+    }catch(error){
+        return{
+            status:"disconnected",
+            latencyMs:Date.now()-startTime,
+            error:error.message,
+        };
+    }
+    
+}

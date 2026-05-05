@@ -2,6 +2,7 @@ import fastify from "fastify";
 import { chatRoutes } from "./routes/chat.js";
 import { config } from "./config.js";
 import { usageRoutes } from "./routes/usage.js";
+import { checkRedisHealth } from "./memory/conversation.js";
 
 const app = fastify({
   logger: config.nodeEnv === "development"
@@ -17,13 +18,20 @@ const app = fastify({
   }
   :true,
 });
+app.get("/api/health", async (request, reply) => {
+  const redisHealth = await checkRedisHealth();
 
-app.get("/api/health", async () => {
-  return {
-    status: "ok",
-    message: "Build 1 Streaming LLM is running....",
+  const isHealthy = redisHealth.status === "connected";
+
+  return reply.status(isHealthy ? 200 : 503).send({
+    status: isHealthy ? "healthy" : "unhealthy",
+    service: "Build 1 Streaming LLM API",
     timestamp: new Date().toISOString(),
-  };
+    uptimeSeconds: Math.floor(process.uptime()),
+    dependencies: {
+      redis: redisHealth,
+    },
+  });
 });
 
 await app.register(chatRoutes);
