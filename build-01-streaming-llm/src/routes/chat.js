@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { getDefaultModel, getProvider } from "../providers/index.js";
 import { config } from "../config.js";
-import { getMessages, saveMessages } from "../memory/conversation.js";
+import { getMessages, saveMessages, clearMessages } from "../memory/conversation.js";
+import { estimateMessageTokens, estimateTokens } from "../utils/token-counter.js";
+import { addUsageLog } from "../middleware/usage-tracker.js";
 
 const chatRequestSchema = z.object({
   sessionId: z.string().min(1, "sessionId is required"),
@@ -50,6 +52,9 @@ export async function chatRoutes(app) {
       },
     ];
 
+    const inputTokens = estimateMessageTokens(messages);
+    const startAt = Date.now(); 
+
     reply.hijack();
 
     reply.raw.writeHead(200, {
@@ -75,6 +80,19 @@ export async function chatRoutes(app) {
       content:assistantResponse,
       timestamp:new Date().toISOString(),
     }
+
+    const outputTokens = estimateTokens(assistantResponse);
+    const responseTimeMs = Date.now() - startAt;
+
+    addUsageLog({
+      sessionId:body.sessionId,
+      provider:provider.providerName,
+      model,
+      inputTokens,
+      outputTokens,
+      cost:0,
+      responseTimeMs,
+    });
 
     await saveMessages(body.sessionId,[
       ...oldMesssages,
@@ -115,7 +133,16 @@ export async function chatRoutes(app) {
     });
   })
 
+  app.delete("/api/chat/:sessionId", async(request,reply)=>{
+    const { sessionId } = request.params;
+    await clearMessages(sessionId);
 
+    return reply.send({
+      status:"ok",
+      message:"Converstaion session cleared",
+      sessionId,
+    })
+  })
 
 
 }
