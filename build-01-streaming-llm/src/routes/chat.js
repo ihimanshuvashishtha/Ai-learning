@@ -102,4 +102,20 @@ export async function chatRoutes(app) {
       reply.raw.end();
     }
   });
+
+
+  app.get("/api/chat/:sessionId/history",async(request, reply)=>{
+    const { sessionId } = request.params;
+    const messages = await getMessages(sessionId);
+
+    return reply.send({
+      sessionId,
+      count:messages.length,
+      messages,
+    });
+  })
+
+
+
+
 }
